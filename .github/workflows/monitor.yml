@@ -3,12 +3,11 @@ name: Social Media Monitor
 on:
   schedule:
     # Runs at 10:15 AM IST (04:45 UTC) and 8:15 PM IST (14:45 UTC)
-    # (Runs 15 minutes after the news script)
     - cron: "45 4,14 * * *"
-  workflow_dispatch: {}   # Allows manual trigger from the GitHub Actions tab
+  workflow_dispatch: {}
 
 permissions:
-  contents: write   # Required to commit state.json updates back to the repo
+  contents: write
 
 jobs:
   check:
@@ -32,4 +31,4 @@ jobs:
           git config user.name "social-monitor-bot"
           git config user.email "actions@github.com"
           git add state.json
-          git diff --staged --quiet || (git pull --rebase && git commit -m "Update seen-posts state [skip ci]" && git push)
+          git diff --staged --quiet || (git commit -m "Update seen-posts state [skip ci]" && git pull --rebase && git push)
