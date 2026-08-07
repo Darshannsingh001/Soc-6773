@@ -25,7 +25,7 @@ jobs:
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
-        run: python3 test_youtube.py
+        run: python3 -u social_monitor.py
 
       - name: Commit updated state
         run: |
