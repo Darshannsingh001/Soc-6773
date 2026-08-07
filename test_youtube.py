@@ -9,7 +9,6 @@ if not YOUTUBE_API_KEY:
     print("ERROR: YOUTUBE_API_KEY secret is not set or empty.")
     exit(1)
 
-# Test simple query directly
 query = "CISF security"
 params = {
     "part": "snippet",
