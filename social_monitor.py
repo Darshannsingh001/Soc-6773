@@ -1,14 +1,8 @@
 """
-Social Media Keyword Monitor (YouTube API Integrated)
-------------------------------------------------------
+Social Media Keyword Monitor (YouTube API Integrated - IST Timestamps)
+----------------------------------------------------------------------
 Monitors social media platforms with direct YouTube Data API v3 integration.
-
-Features:
-- Direct YouTube Data API v3 search (100% video coverage for published videos).
-- Zero third-party pip dependencies (uses built-in urllib and json).
-- Double-boolean filter: (Target Keyword) AND (Security/Admin Terms).
-- Rejects posts/videos older than 48 hours.
-- Deduplicates via state.json and sends push alerts via ntfy.sh.
+Displays all timestamps in Indian Standard Time (IST).
 """
 
 import email.utils
@@ -40,13 +34,24 @@ SECURITY_ADMIN_FILTER = (
     'administration OR "flood alert" OR landslide OR "road blockage" OR disaster OR evacuation'
 )
 
-# Social media domains indexed by Google (excluding YouTube since it uses native API)
+# List for local Python filtering on YouTube titles/descriptions
+SECURITY_KEYWORDS_LIST = [
+    "curfew", "strike", "paramilitary", "cisf", "police", "army", 
+    "deployment", "law and order", "gorkha", "gorkhaland", "agitation", 
+    "bandh", "protest", "gta", "administration", "flood alert", 
+    "landslide", "road blockage", "disaster", "evacuation", "security"
+]
+
+# Social media domains indexed by Google
 SOCIAL_DOMAINS = "site:x.com OR site:twitter.com OR site:facebook.com OR site:instagram.com OR site:t.me"
 
 STATE_FILE = "state.json"
 NTFY_TOPIC = os.environ.get("NTFY_TOPIC")
 NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}" if NTFY_TOPIC else None
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+
+# Indian Standard Time (UTC + 5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 SECONDS_BETWEEN_NOTIFICATIONS = 3
 MAX_PAYLOAD_BYTES = 3500
@@ -59,7 +64,7 @@ def load_state():
             with open(STATE_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Warning: Failed to load {STATE_FILE} ({e}). Starting fresh.")
+            print(f"Warning: Failed to load {STATE_FILE} ({e}). Starting fresh.", flush=True)
     return {"seen_links": []}
 
 
@@ -70,21 +75,20 @@ def save_state(seen_links_list):
 
 
 def fetch_youtube_api(keyword):
-    """Fetches real-time YouTube videos using the official YouTube Data API v3."""
+    """Fetches YouTube videos for keyword and filters titles/descriptions locally."""
     if not YOUTUBE_API_KEY:
-        print("YOUTUBE_API_KEY not set. Skipping official YouTube search.")
+        print("YOUTUBE_API_KEY not set. Skipping YouTube search.", flush=True)
         return []
 
     published_after = (datetime.now(timezone.utc) - timedelta(hours=MAX_POST_AGE_HOURS)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    query = f'"{keyword}" ({SECURITY_ADMIN_FILTER})'
     
     params = {
         "part": "snippet",
-        "q": query,
+        "q": keyword,
         "type": "video",
         "order": "date",
         "publishedAfter": published_after,
-        "maxResults": 10,
+        "maxResults": 15,
         "key": YOUTUBE_API_KEY,
     }
     
@@ -98,12 +102,19 @@ def fetch_youtube_api(keyword):
 
         for item in data.get("items", []):
             video_id = item["id"].get("videoId")
-            title = item["snippet"].get("title", "").strip()
-            if video_id and title:
-                link = f"https://www.youtube.com/watch?v={video_id}"
-                items.append((f"[YouTube] {title}", link, video_id))
+            snippet = item.get("snippet", {})
+            title = snippet.get("title", "").strip()
+            description = snippet.get("description", "").lower()
+            full_text = f"{title.lower()} {description}"
+
+            is_relevant = any(term in full_text for term in SECURITY_KEYWORDS_LIST)
+            
+            if keyword.upper() == "CISF" or is_relevant:
+                if video_id and title:
+                    link = f"https://www.youtube.com/watch?v={video_id}"
+                    items.append((f"[YouTube] {title}", link, video_id))
     except Exception as e:
-        print(f"YouTube API error for '{keyword}': {e}")
+        print(f"YouTube API error for '{keyword}': {e}", flush=True)
 
     return items
 
@@ -195,14 +206,14 @@ def fetch_reddit(keyword):
             if title and link:
                 items.append((f"[Reddit] {title}", link, link))
     except Exception as e:
-        print(f"Reddit fetch error for '{keyword}': {e}")
+        print(f"Reddit fetch error for '{keyword}': {e}", flush=True)
 
     return items
 
 
 def send_notification(title, message, priority="default", tags="", retries=2):
     if not NTFY_URL:
-        print(f"NTFY_TOPIC not set. Skipping notification:\n[{title}]\n{message}")
+        print(f"NTFY_TOPIC not set. Skipping notification:\n[{title}]\n{message}", flush=True)
         return
 
     headers = {"Title": title, "Priority": priority}
@@ -222,13 +233,13 @@ def send_notification(title, message, priority="default", tags="", retries=2):
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < retries:
                 wait = 5 * attempt
-                print(f"Rate limited (429), waiting {wait}s before retry...")
+                print(f"Rate limited (429), waiting {wait}s before retry...", flush=True)
                 time.sleep(wait)
                 continue
-            print(f"Failed to send notification '{title}': {e}")
+            print(f"Failed to send notification '{title}': {e}", flush=True)
             return
         except Exception as e:
-            print(f"Failed to send notification '{title}': {e}")
+            print(f"Failed to send notification '{title}': {e}", flush=True)
             return
 
 
@@ -266,7 +277,7 @@ def send_keyword_digest(kw, items):
             priority="high",
             tags="speech_balloon",
         )
-        print(f"Sent social digest for '{kw}'{part_suffix}: {len(chunk)} item(s)")
+        print(f"Sent social digest for '{kw}'{part_suffix}: {len(chunk)} item(s)", flush=True)
         time.sleep(SECONDS_BETWEEN_NOTIFICATIONS)
 
 
@@ -284,17 +295,17 @@ def main():
             # 1. Fetch from Official YouTube Data API v3
             articles.extend(fetch_youtube_api(kw))
 
-            # 2. Fetch Indexed X, Facebook, Instagram, Telegram via Google RSS
+            # 2. Fetch Indexed X, Facebook, Instagram, Telegram
             try:
                 articles.extend(fetch_google_social(kw))
             except Exception as e:
-                print(f"Error fetching Google Social RSS for '{kw}': {e}")
+                print(f"Error fetching Google Social RSS for '{kw}': {e}", flush=True)
 
             # 3. Fetch Reddit Posts
             try:
                 articles.extend(fetch_reddit(kw))
             except Exception as e:
-                print(f"Error fetching Reddit RSS for '{kw}': {e}")
+                print(f"Error fetching Reddit RSS for '{kw}': {e}", flush=True)
 
             new_items = []
             for title, link, guid in articles:
@@ -310,15 +321,16 @@ def main():
                 quiet_keywords.append(kw)
 
         if quiet_keywords:
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            # Timestamp in Indian Standard Time (IST)
+            now_ist = datetime.now(IST).strftime("%Y-%m-%d %I:%M %p IST")
             quiet_list = "\n".join([f"- {kw}" for kw in quiet_keywords])
             send_notification(
                 f"Social Monitor: No updates ({len(quiet_keywords)} keywords)",
-                f"Checked at {now}.\nNo new social posts for:\n{quiet_list}",
+                f"Checked at {now_ist}.\nNo new social posts for:\n{quiet_list}",
                 priority="min",
                 tags="white_check_mark",
             )
-            print(f"Sent quiet summary for {len(quiet_keywords)} keyword(s).")
+            print(f"Sent quiet summary for {len(quiet_keywords)} keyword(s).", flush=True)
 
     finally:
         save_state(seen_links_list)
