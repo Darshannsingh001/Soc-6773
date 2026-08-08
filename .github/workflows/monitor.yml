@@ -3,7 +3,7 @@ name: Social Media Monitor
 on:
   schedule:
     # Runs at 10:15 AM IST (04:45 UTC) and 8:15 PM IST (14:45 UTC)
-    - cron: "45 4,14 * * *"
+    - cron: "7 7 * * *"
   workflow_dispatch: {}
 
 permissions:
