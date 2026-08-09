@@ -1,6 +1,8 @@
 name: Social Media Monitor
 
 on:
+  repository_dispatch:
+    types: [social-monitor-trigger]
   workflow_dispatch: {}
 
 permissions:
