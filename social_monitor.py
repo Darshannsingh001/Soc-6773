@@ -42,6 +42,16 @@ SECURITY_KEYWORDS_LIST = [
     "landslide", "road blockage", "disaster", "evacuation", "security"
 ]
 
+# Terms that mark a YouTube video as irrelevant noise (motivational reels,
+# exam-prep hype, fitness content, etc.) even if it happens to mention a
+# keyword like CISF. Checked against title + description.
+YOUTUBE_EXCLUDE_TERMS = [
+    "motivation", "motivational", "inspiration", "inspirational",
+    "success story", "workout", "gym", "fitness", "quotes", "speech",
+    "shayari", "status video", "whatsapp status", "best moments",
+    "exam preparation", "physical training tips", "pt tips",
+]
+
 # Social media domains indexed by Google
 SOCIAL_DOMAINS = "site:x.com OR site:twitter.com OR site:facebook.com OR site:instagram.com OR site:t.me"
 
@@ -107,9 +117,16 @@ def fetch_youtube_api(keyword):
             description = snippet.get("description", "").lower()
             full_text = f"{title.lower()} {description}"
 
+            # Drop obvious noise (motivational/inspirational/fitness content)
+            # regardless of which keyword matched.
+            if any(term in full_text for term in YOUTUBE_EXCLUDE_TERMS):
+                continue
+
             is_relevant = any(term in full_text for term in SECURITY_KEYWORDS_LIST)
-            
-            if keyword.upper() == "CISF" or is_relevant:
+
+            # No more blanket bypass for CISF - every keyword must actually
+            # match a security/admin term to be included.
+            if is_relevant:
                 if video_id and title:
                     link = f"https://www.youtube.com/watch?v={video_id}"
                     items.append((f"[YouTube] {title}", link, video_id))
